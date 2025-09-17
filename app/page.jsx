@@ -11,7 +11,7 @@ export default function Home() {
             Layanan Publik Mobile
           </h1>
           <p className="text-gray-600">
-            Sistem Layanan Publik Mobile Responsive
+            Kecamatan Gunung Putri
           </p>
         </div>
 
@@ -59,7 +59,7 @@ export default function Home() {
         </div>
 
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>© 2024 Layanan Publik Mobile</p>
+          <p>© 2025 Layanan Publik Mobile</p>
           <p className="mt-1">Workshop-Friendly System</p>
         </div>
 
