@@ -2,7 +2,20 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Table, Select, message, Card, Row, Col } from "antd";
+import { 
+  Table, 
+  Select, 
+  message, 
+  Card, 
+  Row, 
+  Col, 
+  Input, 
+  Button, 
+  Space, 
+  Dropdown, 
+  Checkbox,
+  Tooltip as AntTooltip
+} from "antd";
 import {
   PieChart,
   Pie,
@@ -11,8 +24,18 @@ import {
   Legend,
   Tooltip,
 } from "recharts";
+import { 
+  SearchOutlined, 
+  FilterOutlined, 
+  DownloadOutlined, 
+  EyeOutlined, 
+  EyeInvisibleOutlined,
+  ReloadOutlined,
+  ClearOutlined
+} from "@ant-design/icons";
 
 const { Option } = Select;
+const { Search } = Input;
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -22,6 +45,19 @@ export default function AdminDashboard() {
   const [chartData, setChartData] = useState([]);
   const [updatingStatus, setUpdatingStatus] = useState({}); // Track which submission is being updated
   const [refreshing, setRefreshing] = useState(false); // Track refresh loading state
+  
+  // Enhanced filtering and search states
+  const [searchText, setSearchText] = useState("");
+  const [filteredInfo, setFilteredInfo] = useState({});
+  const [sortedInfo, setSortedInfo] = useState({});
+  const [visibleColumns, setVisibleColumns] = useState({
+    tracking_code: true,
+    nama: true,
+    jenis_layanan: true,
+    status: true,
+    created_at: true,
+    updated_at: true,
+  });
 
   const COLORS = ["#ffc107", "#1890ff", "#52c41a", "#ff4d4f"];
 
@@ -131,6 +167,20 @@ export default function AdminDashboard() {
     setUpdatingStatus((prev) => ({ ...prev, [submissionId]: true }));
 
     try {
+      // Prevent invalid local transitions for better UX (server also guards)
+      const current = submissions.find((s) => s.id === submissionId)?.status;
+      const rank = { PENGAJUAN_BARU: 1, DIPROSES: 2, SELESAI: 3, DITOLAK: 3 };
+      if ((current === "SELESAI" || current === "DITOLAK") && newStatus !== current) {
+        message.warning("Status final tidak dapat diubah");
+        setUpdatingStatus((prev) => ({ ...prev, [submissionId]: false }));
+        return;
+      }
+      if (rank[newStatus] < rank[current]) {
+        message.warning("Status tidak dapat mundur");
+        setUpdatingStatus((prev) => ({ ...prev, [submissionId]: false }));
+        return;
+      }
+
       const response = await fetch(
         `/api/admin/submissions/${submissionId}/status`,
         {
@@ -195,11 +245,89 @@ export default function AdminDashboard() {
     router.push("/admin/login");
   };
 
+  // Enhanced search and filter functions
+  const handleSearch = (value) => {
+    setSearchText(value);
+  };
+
+  const handleTableChange = (pagination, filters, sorter) => {
+    setFilteredInfo(filters);
+    setSortedInfo(sorter);
+  };
+
+  const clearFilters = () => {
+    setFilteredInfo({});
+    setSortedInfo({});
+    setSearchText("");
+    setStatusFilter("ALL");
+  };
+
+  const handleColumnVisibilityChange = (columnKey, checked) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [columnKey]: checked
+    }));
+  };
+
+  const exportToCSV = () => {
+    const headers = ['Kode Tracking', 'Nama', 'Jenis Layanan', 'Status', 'Dibuat', 'Diupdate'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredSubmissions.map(submission => [
+        submission.tracking_code,
+        `"${submission.nama}"`,
+        `"${submission.jenis_layanan}"`,
+        getStatusText(submission.status),
+        submission.created_at ? new Date(submission.created_at).toLocaleString('id-ID') : '',
+        submission.updated_at ? new Date(submission.updated_at).toLocaleString('id-ID') : ''
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `pengajuan_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const columns = [
     {
       title: "Kode Tracking",
       dataIndex: "tracking_code",
       key: "tracking_code",
+      sorter: (a, b) => a.tracking_code.localeCompare(b.tracking_code),
+      sortOrder: sortedInfo.columnKey === 'tracking_code' && sortedInfo.order,
+      filteredValue: filteredInfo.tracking_code || null,
+      onFilter: (value, record) => record.tracking_code.toLowerCase().includes(value.toLowerCase()),
+      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+        <div style={{ padding: 8 }}>
+          <Input
+            placeholder="Cari kode tracking"
+            value={selectedKeys[0]}
+            onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+            onPressEnter={() => confirm()}
+            style={{ width: 188, marginBottom: 8, display: 'block' }}
+          />
+          <Space>
+            <Button
+              type="primary"
+              onClick={() => confirm()}
+              icon={<SearchOutlined />}
+              size="small"
+              style={{ width: 90 }}
+            >
+              Cari
+            </Button>
+            <Button onClick={() => clearFilters()} size="small" style={{ width: 90 }}>
+              Reset
+            </Button>
+          </Space>
+        </div>
+      ),
       render: (text) => (
         <div className="max-w-[120px] sm:max-w-[200px] lg:max-w-[300px]">
           <span
@@ -217,6 +345,35 @@ export default function AdminDashboard() {
       title: "Nama",
       dataIndex: "nama",
       key: "nama",
+      sorter: (a, b) => a.nama.localeCompare(b.nama),
+      sortOrder: sortedInfo.columnKey === 'nama' && sortedInfo.order,
+      filteredValue: filteredInfo.nama || null,
+      onFilter: (value, record) => record.nama.toLowerCase().includes(value.toLowerCase()),
+      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+        <div style={{ padding: 8 }}>
+          <Input
+            placeholder="Cari nama"
+            value={selectedKeys[0]}
+            onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+            onPressEnter={() => confirm()}
+            style={{ width: 188, marginBottom: 8, display: 'block' }}
+          />
+          <Space>
+            <Button
+              type="primary"
+              onClick={() => confirm()}
+              icon={<SearchOutlined />}
+              size="small"
+              style={{ width: 90 }}
+            >
+              Cari
+            </Button>
+            <Button onClick={() => clearFilters()} size="small" style={{ width: 90 }}>
+              Reset
+            </Button>
+          </Space>
+        </div>
+      ),
       width: 120,
       render: (text) => (
         <div className="max-w-[80px] sm:max-w-[120px]">
@@ -233,6 +390,35 @@ export default function AdminDashboard() {
       title: "Jenis Layanan",
       dataIndex: "jenis_layanan",
       key: "jenis_layanan",
+      sorter: (a, b) => a.jenis_layanan.localeCompare(b.jenis_layanan),
+      sortOrder: sortedInfo.columnKey === 'jenis_layanan' && sortedInfo.order,
+      filteredValue: filteredInfo.jenis_layanan || null,
+      onFilter: (value, record) => record.jenis_layanan.toLowerCase().includes(value.toLowerCase()),
+      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+        <div style={{ padding: 8 }}>
+          <Input
+            placeholder="Cari jenis layanan"
+            value={selectedKeys[0]}
+            onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+            onPressEnter={() => confirm()}
+            style={{ width: 188, marginBottom: 8, display: 'block' }}
+          />
+          <Space>
+            <Button
+              type="primary"
+              onClick={() => confirm()}
+              icon={<SearchOutlined />}
+              size="small"
+              style={{ width: 90 }}
+            >
+              Cari
+            </Button>
+            <Button onClick={() => clearFilters()} size="small" style={{ width: 90 }}>
+              Reset
+            </Button>
+          </Space>
+        </div>
+      ),
       width: 120,
       render: (text) => (
         <div className="max-w-[80px] sm:max-w-[120px]">
@@ -249,6 +435,16 @@ export default function AdminDashboard() {
       title: "Status",
       dataIndex: "status",
       key: "status",
+      sorter: (a, b) => a.status.localeCompare(b.status),
+      sortOrder: sortedInfo.columnKey === 'status' && sortedInfo.order,
+      filters: [
+        { text: 'Pengajuan Baru', value: 'PENGAJUAN_BARU' },
+        { text: 'Sedang Diproses', value: 'DIPROSES' },
+        { text: 'Selesai', value: 'SELESAI' },
+        { text: 'Ditolak', value: 'DITOLAK' },
+      ],
+      filteredValue: filteredInfo.status || null,
+      onFilter: (value, record) => record.status === value,
       width: 180,
       render: (status, record) => (
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
@@ -298,6 +494,8 @@ export default function AdminDashboard() {
       title: "Dibuat",
       dataIndex: "created_at",
       key: "created_at",
+      sorter: (a, b) => new Date(a.created_at) - new Date(b.created_at),
+      sortOrder: sortedInfo.columnKey === 'created_at' && sortedInfo.order,
       width: 150,
       responsive: ["lg"],
       render: (date) => {
@@ -329,6 +527,8 @@ export default function AdminDashboard() {
       title: "Diupdate",
       dataIndex: "updated_at",
       key: "updated_at",
+      sorter: (a, b) => new Date(a.updated_at) - new Date(b.updated_at),
+      sortOrder: sortedInfo.columnKey === 'updated_at' && sortedInfo.order,
       width: 150,
       responsive: ["lg"],
       render: (date) => {
@@ -358,10 +558,20 @@ export default function AdminDashboard() {
     },
   ];
 
-  const filteredSubmissions =
-    statusFilter === "ALL"
-      ? submissions
-      : submissions.filter((sub) => sub.status === statusFilter);
+  // Enhanced filtering logic with global search
+  const filteredSubmissions = submissions.filter((submission) => {
+    // Status filter
+    const statusMatch = statusFilter === "ALL" || submission.status === statusFilter;
+    
+    // Global search filter
+    const searchMatch = !searchText || 
+      submission.tracking_code.toLowerCase().includes(searchText.toLowerCase()) ||
+      submission.nama.toLowerCase().includes(searchText.toLowerCase()) ||
+      submission.jenis_layanan.toLowerCase().includes(searchText.toLowerCase()) ||
+      getStatusText(submission.status).toLowerCase().includes(searchText.toLowerCase());
+    
+    return statusMatch && searchMatch;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -737,49 +947,186 @@ export default function AdminDashboard() {
         </Card>
 
         {/* Table */}
-        <Card title="Daftar Pengajuan">
-          <div className="mb-4">
-            <Select
-              value={statusFilter}
-              onChange={setStatusFilter}
-              style={{ width: "100%", maxWidth: 200 }}
-              placeholder="Filter by status"
-              disabled={loading || Object.values(updatingStatus).some(Boolean)}
-              loading={loading}
-            >
-              <Option value="ALL">Semua Status</Option>
-              <Option value="PENGAJUAN_BARU">Pengajuan Baru</Option>
-              <Option value="DIPROSES">Sedang Diproses</Option>
-              <Option value="SELESAI">Selesai</Option>
-              <Option value="DITOLAK">Ditolak</Option>
-            </Select>
+        <Card 
+          title="Daftar Pengajuan"
+          extra={
+            <Space>
+              <Button 
+                icon={<DownloadOutlined />} 
+                onClick={exportToCSV}
+                disabled={loading || filteredSubmissions.length === 0}
+                size="small"
+              >
+                Export CSV
+              </Button>
+              <Button 
+                icon={<ReloadOutlined />} 
+                onClick={handleRefresh}
+                disabled={refreshing || loading}
+                size="small"
+              >
+                Refresh
+              </Button>
+            </Space>
+          }
+        >
+          {/* Enhanced Filter Controls */}
+          <div className="mb-4 space-y-3">
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={12} md={8}>
+                <Search
+                  placeholder="Cari di semua kolom..."
+                  value={searchText}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  onSearch={handleSearch}
+                  enterButton={<SearchOutlined />}
+                  allowClear
+                  disabled={loading || Object.values(updatingStatus).some(Boolean)}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Select
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  style={{ width: "100%" }}
+                  placeholder="Filter by status"
+                  disabled={loading || Object.values(updatingStatus).some(Boolean)}
+                  loading={loading}
+                >
+                  <Option value="ALL">Semua Status</Option>
+                  <Option value="PENGAJUAN_BARU">Pengajuan Baru</Option>
+                  <Option value="DIPROSES">Sedang Diproses</Option>
+                  <Option value="SELESAI">Selesai</Option>
+                  <Option value="DITOLAK">Ditolak</Option>
+                </Select>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: 'tracking_code',
+                        label: (
+                          <Checkbox
+                            checked={visibleColumns.tracking_code}
+                            onChange={(e) => handleColumnVisibilityChange('tracking_code', e.target.checked)}
+                          >
+                            Kode Tracking
+                          </Checkbox>
+                        ),
+                      },
+                      {
+                        key: 'nama',
+                        label: (
+                          <Checkbox
+                            checked={visibleColumns.nama}
+                            onChange={(e) => handleColumnVisibilityChange('nama', e.target.checked)}
+                          >
+                            Nama
+                          </Checkbox>
+                        ),
+                      },
+                      {
+                        key: 'jenis_layanan',
+                        label: (
+                          <Checkbox
+                            checked={visibleColumns.jenis_layanan}
+                            onChange={(e) => handleColumnVisibilityChange('jenis_layanan', e.target.checked)}
+                          >
+                            Jenis Layanan
+                          </Checkbox>
+                        ),
+                      },
+                      {
+                        key: 'status',
+                        label: (
+                          <Checkbox
+                            checked={visibleColumns.status}
+                            onChange={(e) => handleColumnVisibilityChange('status', e.target.checked)}
+                          >
+                            Status
+                          </Checkbox>
+                        ),
+                      },
+                      {
+                        key: 'created_at',
+                        label: (
+                          <Checkbox
+                            checked={visibleColumns.created_at}
+                            onChange={(e) => handleColumnVisibilityChange('created_at', e.target.checked)}
+                          >
+                            Dibuat
+                          </Checkbox>
+                        ),
+                      },
+                      {
+                        key: 'updated_at',
+                        label: (
+                          <Checkbox
+                            checked={visibleColumns.updated_at}
+                            onChange={(e) => handleColumnVisibilityChange('updated_at', e.target.checked)}
+                          >
+                            Diupdate
+                          </Checkbox>
+                        ),
+                      },
+                    ],
+                  }}
+                  trigger={['click']}
+                >
+                  <Button icon={<EyeOutlined />} size="small">
+                    Kolom
+                  </Button>
+                </Dropdown>
+              </Col>
+              <Col xs={24} sm={12} md={4}>
+                <Button 
+                  icon={<ClearOutlined />} 
+                  onClick={clearFilters}
+                  disabled={loading || Object.values(updatingStatus).some(Boolean)}
+                  size="small"
+                  style={{ width: '100%' }}
+                >
+                  Clear
+                </Button>
+              </Col>
+            </Row>
             {loading && (
-              <span className="ml-2 text-xs sm:text-sm text-gray-500">
+              <div className="text-center text-xs sm:text-sm text-gray-500">
                 Memuat data...
-              </span>
+              </div>
+            )}
+            {(searchText || statusFilter !== "ALL") && (
+              <div className="text-center text-xs sm:text-sm text-blue-600">
+                Menampilkan {filteredSubmissions.length} dari {submissions.length} pengajuan
+              </div>
             )}
           </div>
 
           <div className="relative">
             <Table
-              columns={columns}
+              columns={columns.filter(col => visibleColumns[col.key])}
               dataSource={filteredSubmissions}
               rowKey="id"
               loading={loading}
               scroll={{ x: 800, y: 400 }}
+              onChange={handleTableChange}
               pagination={{
                 pageSize: 10,
-                showSizeChanger: false,
-                showQuickJumper: false,
+                showSizeChanger: true,
+                showQuickJumper: true,
                 showTotal: (total, range) =>
                   `${range[0]}-${range[1]} dari ${total} pengajuan`,
                 size: "small",
                 responsive: true,
+                pageSizeOptions: ['10', '20', '50', '100'],
+                showLessItems: true,
               }}
               size="small"
               className="responsive-table"
               bordered={false}
               tableLayout="fixed"
+              showSorterTooltip={false}
             />
 
             {/* Loading overlay when any status is being updated */}

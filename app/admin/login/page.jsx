@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { message } from "antd";
 
@@ -12,6 +12,22 @@ export default function AdminLogin() {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Simple math captcha
+  const [captcha, setCaptcha] = useState({ a: 0, b: 0 });
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+
+  const regenerateCaptcha = () => {
+    const a = Math.floor(Math.random() * 9) + 1; // 1-9
+    const b = Math.floor(Math.random() * 9) + 1; // 1-9
+    setCaptcha({ a, b });
+    setCaptchaAnswer("");
+  };
+
+  useEffect(() => {
+    regenerateCaptcha();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -32,6 +48,14 @@ export default function AdminLogin() {
       return;
     }
 
+    // Validate captcha
+    const expected = captcha.a + captcha.b;
+    if (String(expected) !== String(captchaAnswer).trim()) {
+      setErrors({ submit: "Captcha tidak sesuai" });
+      regenerateCaptcha();
+      return;
+    }
+
     // Prevent multiple submissions
     if (isSubmitting) {
       return;
@@ -41,29 +65,39 @@ export default function AdminLogin() {
     setErrors({}); // Clear previous errors
 
     try {
-      // Simulate network delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Simple authentication for workshop - in production use proper auth
-      if (formData.username === "admin" && formData.password === "admin123") {
-        // Set session (in production use proper session management)
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: formData.username.trim(),
+          password: formData.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Set session with admin data
         localStorage.setItem("adminLoggedIn", "true");
-        console.log("Login successful, localStorage set"); // Debug log
+        localStorage.setItem("adminData", JSON.stringify(data.admin));
+        console.log("Login successful, admin data stored:", data.admin);
         
         // Show success message
-        message.success("Login berhasil! Mengalihkan ke dashboard...");
+        message.success(`Selamat datang, ${data.admin.username}!`);
         
         // Small delay to show the success message
         setTimeout(() => {
           router.push("/admin");
         }, 1000);
       } else {
-        setErrors({ submit: "Username atau password salah" });
+        setErrors({ submit: data.message || "Username atau password salah" });
         setIsSubmitting(false); // Reset loading state on error
       }
     } catch (error) {
       console.error("Login error:", error);
-      setErrors({ submit: "Terjadi kesalahan" });
+      setErrors({ submit: "Terjadi kesalahan jaringan" });
       setIsSubmitting(false); // Reset loading state on error
     }
   };
@@ -107,15 +141,54 @@ export default function AdminLogin() {
             >
               Password
             </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black transition duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Masukkan password"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                id="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full pr-12 px-3 py-2 border border-gray-300 rounded-lg text-black transition duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Masukkan password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((p) => !p)}
+                className="absolute inset-y-0 right-0 px-3 text-sm text-blue-600 hover:text-blue-800"
+                aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+              >
+                {showPassword ? "Sembunyikan" : "Tampilkan"}
+              </button>
+            </div>
+          </div>
+
+          {/* Simple Math Captcha */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Verifikasi (Captcha)
+            </label>
+            <div className="flex items-center space-x-3">
+              <div className="px-3 py-2 bg-gray-100 rounded-lg text-gray-800 text-sm font-medium select-none">
+                {captcha.a} + {captcha.b} = ?
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={captchaAnswer}
+                onChange={(e) => setCaptchaAnswer(e.target.value)}
+                className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-black transition duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Jawaban"
+              />
+              <button
+                type="button"
+                onClick={regenerateCaptcha}
+                className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 text-sm"
+                title="Muat ulang captcha"
+              >
+                Ulangi
+              </button>
+            </div>
           </div>
 
           {errors.submit && (
@@ -153,9 +226,9 @@ export default function AdminLogin() {
           </a>
         </div>
 
-        <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-sm text-yellow-800">
-            <strong>Workshop Demo:</strong> Username: admin, Password: admin123
+        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Admin Login:</strong> Masukkan username dan password admin yang telah terdaftar
           </p>
         </div>
       </div>

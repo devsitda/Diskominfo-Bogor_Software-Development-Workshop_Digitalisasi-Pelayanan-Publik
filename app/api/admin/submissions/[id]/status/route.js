@@ -73,8 +73,32 @@ export async function PATCH(request, { params }) {
       );
     }
 
-    // Update status
+    // Guard invalid transitions (no rollback)
     const oldStatus = submission.status;
+    const rank = {
+      PENGAJUAN_BARU: 1,
+      DIPROSES: 2,
+      SELESAI: 3,
+      DITOLAK: 3, // treat as terminal as well
+    };
+
+    // Disallow changing terminal states
+    if ((oldStatus === "SELESAI" || oldStatus === "DITOLAK") && status !== oldStatus) {
+      return NextResponse.json(
+        { message: "Status final tidak dapat diubah" },
+        { status: 400 }
+      );
+    }
+
+    // Disallow rollback to lower rank (e.g., DIPROSES -> PENGAJUAN_BARU)
+    if (rank[status] < rank[oldStatus]) {
+      return NextResponse.json(
+        { message: "Status tidak dapat mundur" },
+        { status: 400 }
+      );
+    }
+
+    // Update status
     await submission.update({ status });
 
     console.log("Status updated successfully:", oldStatus, "->", status);
