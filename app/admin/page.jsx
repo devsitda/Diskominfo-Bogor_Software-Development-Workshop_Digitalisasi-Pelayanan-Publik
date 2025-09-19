@@ -60,6 +60,39 @@ export default function AdminDashboard() {
   });
 
   const COLORS = ["#ffc107", "#1890ff", "#52c41a", "#ff4d4f"];
+  const SERVICE_COLORS = ["#198754", "#0d6efd", "#6f42c1", "#fd7e14", "#20c997", "#dc3545", "#6610f2", "#198754"];
+
+  // Compute summary per jenis_layanan
+  const getServiceSummary = (items) => {
+    const normalize = (s) => (s || "").toString().trim().toUpperCase().replace(/\s+/g, " ");
+    const buckets = {
+      SURAT_KETERANGAN: ["SURAT_KETERANGAN", "SURAT KETERANGAN"],
+      KTP: ["KTP"],
+      KK: ["KK"],
+      AKTE_LAHIR: ["AKTE LAHIR", "AKTE_LAHIR", "AKTA LAHIR"],
+      SURAT_PINDAH: ["SURAT PINDAH", "SURAT_PINDAH"],
+      SKCK: ["SKCK"],
+    };
+    const counts = {
+      SURAT_KETERANGAN: 0,
+      KTP: 0,
+      KK: 0,
+      AKTE_LAHIR: 0,
+      SURAT_PINDAH: 0,
+      SKCK: 0,
+    };
+
+    for (const it of items || []) {
+      const jl = normalize(it.jenis_layanan);
+      for (const key of Object.keys(buckets)) {
+        if (buckets[key].some((v) => jl === v)) {
+          counts[key] += 1;
+          break;
+        }
+      }
+    }
+    return counts;
+  };
 
   useEffect(() => {
     // Check if admin is logged in
@@ -579,16 +612,32 @@ export default function AdminDashboard() {
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                Admin Dashboard
-              </h1>
-              <p className="text-sm sm:text-base text-gray-600 mt-1">
-                {loading
-                  ? "Memuat data pengajuan..."
-                  : "Kelola pengajuan layanan masyarakat"}
-              </p>
-            </div>
+          <div className="flex items-start space-x-4">
+  {/* Logo Kabupaten Bogor */}
+  <img
+    src="/images/logo-bogor.png" // Ganti dengan path logo kamu
+    alt="Logo Kabupaten Bogor"
+    className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
+  />
+
+  {/* Judul dan Deskripsi */}
+  <div>
+    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+      Admin Dashboard PATEN
+    </h1>
+    <p className="text-sm sm:text-base text-gray-600 mt-1">
+      {loading
+        ? "Memuat data pengajuan..."
+        : "Kelola pengajuan layanan masyarakat Gunung Putri"}
+    </p>
+  </div>
+</div>
+
+
+
+
+
+
             <div className="flex items-center space-x-2 sm:space-x-4">
               <button
                 onClick={handleRefresh}
@@ -865,86 +914,140 @@ export default function AdminDashboard() {
           </Col>
         </Row>
 
-        {/* Chart */}
-        <Card title="Distribusi Status Pengajuan" className="mb-6 sm:mb-8">
-          {loading ? (
-            <div className="flex items-center justify-center h-[300px]">
-              <div className="text-center">
-                <svg
-                  className="animate-spin h-8 w-8 sm:h-12 sm:w-12 text-blue-600 mx-auto mb-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                <p className="text-gray-600">Memuat data chart...</p>
-              </div>
-            </div>
-          ) : chartData.length === 0 ? (
-            <div className="flex items-center justify-center h-[300px]">
-              <div className="text-center text-gray-500">
-                <svg
-                  className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 text-gray-300"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                  />
-                </svg>
-                <p className="text-base sm:text-lg font-medium">
-                  Belum ada data
-                </p>
-                <p className="text-xs sm:text-sm">
-                  Data chart akan muncul setelah ada pengajuan
-                </p>
-              </div>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
-                  }
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
+        {/* Services Summary Row */}
+        <Row gutter={[8, 8]} className="mb-6 sm:mb-8">
+          {(() => {
+            const svc = getServiceSummary(submissions);
+            const items = [
+              { label: "SURAT_KETERANGAN", value: svc.SURAT_KETERANGAN },
+              { label: "KTP", value: svc.KTP },
+              { label: "KK", value: svc.KK },
+              { label: "AKTE LAHIR", value: svc.AKTE_LAHIR },
+              { label: "SURAT PINDAH", value: svc.SURAT_PINDAH },
+              { label: "SKCK", value: svc.SKCK },
+            ];
+            return items.map((it, idx) => (
+              <Col key={it.label} xs={12} sm={8} md={8} lg={4}>
+                <Card>
+                  <div className="text-center">
+                    {loading ? (
+                      <div className="flex items-center justify-center">
+                        <svg
+                          className="animate-spin h-5 w-5 sm:h-6 sm:w-6 text-green-600"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="text-lg sm:text-2xl font-bold text-green-600">
+                        {it.value}
+                      </div>
+                    )}
+                    <div className="text-xs sm:text-sm text-gray-600">
+                      {it.label}
+                    </div>
+                  </div>
+                </Card>
+              </Col>
+            ));
+          })()}
+        </Row>
+
+        {/* Charts Row */}
+        <Row gutter={[8, 8]} className="mb-6 sm:mb-8">
+          <Col xs={24} lg={12}>
+            <Card title="Distribusi Status Pengajuan" headStyle={{ backgroundColor: "#198754", color: "white" }}>
+              {loading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="text-center">
+                    <svg className="animate-spin h-8 w-8 sm:h-12 sm:w-12 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-gray-600">Memuat data chart...</p>
+                  </div>
+                </div>
+              ) : chartData.length === 0 ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="text-center text-gray-500">
+                    <svg className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <p className="text-base sm:text-lg font-medium">Belum ada data</p>
+                    <p className="text-xs sm:text-sm">Data chart akan muncul setelah ada pengajuan</p>
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie data={chartData} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} outerRadius={80} fill="#8884d8" dataKey="value">
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-status-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card title="Distribusi Jenis Layanan"  headStyle={{ backgroundColor: "#198754", color: "white" }}>
+              {loading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="text-center">
+                    <svg className="animate-spin h-8 w-8 sm:h-12 sm:w-12 text-green-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-gray-600">Memuat data chart...</p>
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    {(() => {
+                      const svc = getServiceSummary(submissions);
+                      const svcData = [
+                        { name: "SURAT_KETERANGAN", value: svc.SURAT_KETERANGAN },
+                        { name: "KTP", value: svc.KTP },
+                        { name: "KK", value: svc.KK },
+                        { name: "AKTE LAHIR", value: svc.AKTE_LAHIR },
+                        { name: "SURAT PINDAH", value: svc.SURAT_PINDAH },
+                        { name: "SKCK", value: svc.SKCK },
+                      ].filter((d) => d.value > 0);
+                      return (
+                        <Pie data={svcData} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} outerRadius={80} fill="#198754" dataKey="value">
+                          {svcData.map((entry, idx) => (
+                            <Cell key={`cell-svc-${idx}`} fill={SERVICE_COLORS[idx % SERVICE_COLORS.length]} />
+                          ))}
+                        </Pie>
+                      );
+                    })()}
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </Card>
+          </Col>
+        </Row>
 
         {/* Table */}
         <Card 
